@@ -105,7 +105,72 @@ So what are we looking at? The ELF sections mentioned earlier are mapped into *s
 
 Additionally, try searching for other ways of matching memory segments with sections.
 
+**[A1]**:
+```
+gef➤  vmmap
+[ Legend:  Code | Stack | Heap ]
+Start              End                Offset             Perm Path
+0x0000000000400000 0x0000000000401000 0x0000000000000000 r-- /home/cosmin/osds-lab/lab1/bin/ex1
+0x0000000000401000 0x0000000000402000 0x0000000000001000 r-x /home/cosmin/osds-lab/lab1/bin/ex1
+0x0000000000402000 0x0000000000403000 0x0000000000002000 r-- /home/cosmin/osds-lab/lab1/bin/ex1
+0x0000000000403000 0x0000000000404000 0x0000000000002000 r-- /home/cosmin/osds-lab/lab1/bin/ex1
+0x0000000000404000 0x0000000000405000 0x0000000000003000 rw- /home/cosmin/osds-lab/lab1/bin/ex1
+0x00007ffff7c00000 0x00007ffff7c24000 0x0000000000000000 r-- /usr/lib/libc.so.6
+0x00007ffff7c24000 0x00007ffff7d96000 0x0000000000024000 r-x /usr/lib/libc.so.6
+0x00007ffff7d96000 0x00007ffff7e05000 0x0000000000196000 r-- /usr/lib/libc.so.6
+0x00007ffff7e05000 0x00007ffff7e09000 0x0000000000204000 r-- /usr/lib/libc.so.6
+0x00007ffff7e09000 0x00007ffff7e0b000 0x0000000000208000 rw- /usr/lib/libc.so.6
+0x00007ffff7e0b000 0x00007ffff7e13000 0x0000000000000000 rw-
+0x00007ffff7f98000 0x00007ffff7f9d000 0x0000000000000000 rw-
+0x00007ffff7fba000 0x00007ffff7fbe000 0x0000000000000000 r-- [vvar]
+0x00007ffff7fbe000 0x00007ffff7fc0000 0x0000000000000000 r-- [vvar_vclock]
+0x00007ffff7fc0000 0x00007ffff7fc2000 0x0000000000000000 r-x [vdso]
+0x00007ffff7fc2000 0x00007ffff7fc3000 0x0000000000000000 r-- /usr/lib/ld-linux-x86-64.so.2
+0x00007ffff7fc3000 0x00007ffff7fed000 0x0000000000001000 r-x /usr/lib/ld-linux-x86-64.so.2
+0x00007ffff7fed000 0x00007ffff7ffb000 0x000000000002b000 r-- /usr/lib/ld-linux-x86-64.so.2
+0x00007ffff7ffb000 0x00007ffff7ffd000 0x0000000000039000 r-- /usr/lib/ld-linux-x86-64.so.2
+0x00007ffff7ffd000 0x00007ffff7ffe000 0x000000000003b000 rw- /usr/lib/ld-linux-x86-64.so.2
+0x00007ffff7ffe000 0x00007ffff7fff000 0x0000000000000000 rw-
+0x00007ffffffde000 0x00007ffffffff000 0x0000000000000000 rw- [stack]
+0xffffffffff600000 0xffffffffff601000 0x0000000000000000 --x [vsyscall]
+```
+
+```
+gef➤  find 0x0000000000404000, 0x0000000000405000, {char[22]}"Where is this located?"
+0x404020 <useful>
+1 pattern found.
+gef➤  info symbol useful
+useful in section .data of /home/cosmin/osds-lab/lab1/bin/ex1
+```
+
 **[Q2]**: Try finding the address of `bar()` in gdb and printing its disassembly.
+
+**[A2]**:
+```
+gef➤  info addr bar
+Symbol "bar" is a function at address 0x401126.
+gef➤  disassemble bar
+Dump of assembler code for function bar:
+   0x0000000000401126 <+0>:	push   rbp
+   0x0000000000401127 <+1>:	mov    rbp,rsp
+   0x000000000040112a <+4>:	sub    rsp,0x20
+   0x000000000040112e <+8>:	mov    DWORD PTR [rbp-0x14],edi
+   0x0000000000401131 <+11>:	mov    QWORD PTR [rbp-0x20],rsi
+   0x0000000000401135 <+15>:	mov    DWORD PTR [rbp-0x4],0x0
+   0x000000000040113c <+22>:	jmp    0x401151 <bar+43>
+   0x000000000040113e <+24>:	lea    rax,[rip+0x2edb]        # 0x404020 <useful>
+   0x0000000000401145 <+31>:	mov    rdi,rax
+   0x0000000000401148 <+34>:	call   0x401030 <puts@plt>
+   0x000000000040114d <+39>:	add    DWORD PTR [rbp-0x4],0x1
+   0x0000000000401151 <+43>:	mov    eax,DWORD PTR [rbp-0x4]
+   0x0000000000401154 <+46>:	cmp    eax,DWORD PTR [rbp-0x14]
+   0x0000000000401157 <+49>:	jl     0x40113e <bar+24>
+   0x0000000000401159 <+51>:	nop
+   0x000000000040115a <+52>:	nop
+   0x000000000040115b <+53>:	leave
+   0x000000000040115c <+54>:	ret
+End of assembler dump.
+```
 
 What about the other files in `vmmap`? You are for sure familiar with the concepts of *libraries*. Most of the other segments are mapped libraries, but there are also some other special memory segments, like the `stack` or the `heap`, which are not actually filled up with useful values all the time. The other segments are all mapped from files, while these special segments have their memory reserved for *dynamic use*. All these segments are actually allocated using the [mmap](https://www.man7.org/linux/man-pages/man2/mmap.2.html) syscall. We'll talk about the `stack` and the `heap` later. First, let's have some fun with `mmap`.
 
@@ -132,6 +197,21 @@ There's a small template for it in `ex2.c`.
 
 **[Q3]**: Check `gdb` with your binary. How does `vmmap` look after running `mmap`? You can step through each line of code with `next` or `n`. You can step through each assembly instruction with `next instruction` or `ni`.
 
+**[A3]**: `mmap` command's effect can be seen as the page mapped in the virtual memory
+
+```
+gef➤  vmmap
+[ Legend:  Code | Stack | Heap ]
+Start              End                Offset             Perm Path
+0x0000000000400000 0x0000000000401000 0x0000000000000000 r-- /home/cosmin/labs/osds-lab/lab1/bin/ex2
+0x0000000000401000 0x0000000000402000 0x0000000000001000 r-x /home/cosmin/labs/osds-lab/lab1/bin/ex2
+...
+0x00007ffff7fb9000 0x00007ffff7fba000 0x0000000000000000 rwx
+...
+0x00007ffffffde000 0x00007ffffffff000 0x0000000000000000 rw- [stack]
+0xffffffffff600000 0xffffffffff601000 0x0000000000000000 --x [vsyscall]
+```
+
 To see each line of assembly being executed by `foo()`, you can step into the function pointer call with `step instruction`, or `si`.
 
 ## Exercise 3 - Stacks, calling conventions and mind controlling execution
@@ -156,9 +236,115 @@ Take a look at `ex3.c`. Compile it with `make ex3` and check out its disassembly
 
 **[Q4]**: Can you identify the arguments of a function call in the disassembly?
 
+**[A4]**:
+
+```
+00000000004011f2 <main>:
+
+int main() {
+  4011f2:       55                      push   %rbp
+  4011f3:       48 89 e5                mov    %rsp,%rbp
+  4011f6:       48 81 ec 00 01 00 00    sub    $0x100,%rsp
+        char name[256];
+        puts("What's your name?");
+  4011fd:       48 8d 05 dd 0e 00 00    lea    0xedd(%rip),%rax        # 4020e1 <_IO_stdin_used+0xe1>
+  401204:       48 89 c7                mov    %rax,%rdi
+  401207:       e8 24 fe ff ff          call   401030 <puts@plt>
+        scanf("%255s", name);
+  40120c:       48 8d 85 00 ff ff ff    lea    -0x100(%rbp),%rax
+  401213:       48 8d 15 d9 0e 00 00    lea    0xed9(%rip),%rdx        # 4020f3 <_IO_stdin_used+0xf3>
+  40121a:       48 89 c6                mov    %rax,%rsi
+  40121d:       48 89 d7                mov    %rdx,%rdi
+  401220:       b8 00 00 00 00          mov    $0x0,%eax
+  401225:       e8 26 fe ff ff          call   401050 <__isoc23_scanf@plt>
+        puts("Oh, ads incoming. Hope you have uBlock on...");
+  40122a:       48 8d 05 cf 0e 00 00    lea    0xecf(%rip),%rax        # 402100 <_IO_stdin_used+0x100>
+  401231:       48 89 c7                mov    %rax,%rdi
+  401234:       e8 f7 fd ff ff          call   401030 <puts@plt>
+        advertisment(rand() % 10, name);
+  401239:       e8 22 fe ff ff          call   401060 <rand@plt>
+  40123e:       89 c1                   mov    %eax,%ecx
+  401240:       48 63 c1                movslq %ecx,%rax
+  401243:       48 69 c0 67 66 66 66    imul   $0x66666667,%rax,%rax
+  40124a:       48 c1 e8 20             shr    $0x20,%rax
+  40124e:       89 c2                   mov    %eax,%edx
+  401250:       c1 fa 02                sar    $0x2,%edx
+  401253:       89 c8                   mov    %ecx,%eax
+  401255:       c1 f8 1f                sar    $0x1f,%eax
+  401258:       29 c2                   sub    %eax,%edx
+  40125a:       89 d0                   mov    %edx,%eax
+  40125c:       c1 e0 02                shl    $0x2,%eax
+  40125f:       01 d0                   add    %edx,%eax
+  401261:       01 c0                   add    %eax,%eax
+  401263:       29 c1                   sub    %eax,%ecx
+  401265:       89 ca                   mov    %ecx,%edx
+  401267:       48 8d 85 00 ff ff ff    lea    -0x100(%rbp),%rax
+  40126e:       48 89 c6                mov    %rax,%rsi
+  401271:       89 d7                   mov    %edx,%edi
+  401273:       e8 08 ff ff ff          call   401180 <advertisment>
+        return 0;
+  401278:       b8 00 00 00 00          mov    $0x0,%eax
+}
+  40127d:       c9                      leavec
+  40127e:       c3                      ret
+```
+
+```
+scanf("%255s", name);
+  40120c:       48 8d 85 00 ff ff ff    lea    -0x100(%rbp),%rax
+  401213:       48 8d 15 d9 0e 00 00    lea    0xed9(%rip),%rdx        # 4020f3 <_IO_stdin_used+0xf3>
+  // Load the second parameter
+  40121a:       48 89 c6                mov    %rax,%rsi
+  // Load the first parameter
+  40121d:       48 89 d7                mov    %rdx,%rdi
+  401220:       b8 00 00 00 00          mov    $0x0,%eax
+  401225:       e8 26 fe ff ff          call   401050 <__isoc23_scanf@plt>
+```
+
+```
+        advertisment(rand() % 10, name);
+  401239:       e8 22 fe ff ff          call   401060 <rand@plt>
+  // Conventional return register is `%eax`; put the `rand()` value in `%ecx`
+  40123e:       89 c1                   mov    %eax,%ecx
+  401240:       48 63 c1                movslq %ecx,%rax
+  401243:       48 69 c0 67 66 66 66    imul   $0x66666667,%rax,%rax
+  40124a:       48 c1 e8 20             shr    $0x20,%rax
+  40124e:       89 c2                   mov    %eax,%edx
+  401250:       c1 fa 02                sar    $0x2,%edx
+  401253:       89 c8                   mov    %ecx,%eax
+  401255:       c1 f8 1f                sar    $0x1f,%eax
+  401258:       29 c2                   sub    %eax,%edx
+  40125a:       89 d0                   mov    %edx,%eax
+  40125c:       c1 e0 02                shl    $0x2,%eax
+  40125f:       01 d0                   add    %edx,%eax
+  401261:       01 c0                   add    %eax,%eax
+  401263:       29 c1                   sub    %eax,%ecx
+  // ^ Modulo operation mumbo jumbo
+  // Modulo operation done; Result in `%edx`
+  401265:       89 ca                   mov    %ecx,%edx
+  // Get the name variable, stored 0x100 bytes in the stack and load in the `%rsi` parameter register
+  401267:       48 8d 85 00 ff ff ff    lea    -0x100(%rbp),%rax
+  40126e:       48 89 c6                mov    %rax,%rsi
+  // Store `rand() % 10` result in the `%edi` parameter register
+  401271:       89 d7                   mov    %edx,%edi
+  401273:       e8 08 ff ff ff          call   401180 <advertisment>
+```
+
 Now that we know about the calling convention, let's play with it. With a debugger, you can choose to change whatever registers you want, whenever you want. Using ONLY the `set` command in `gdb`, try calling a function that isn't called in `ex3.c`, with arguments chosen by you. Make it obvious that you chose the arguments.
 
 **[Q5]**: Did you get a `SIGSEGV` in `printf()`? What causes it? `pwndbg` hints at the reason.
+
+**[A5]**: No
+
+```
+b main 
+r
+b exit 
+set $rdi=&message 
+set $rip=&print_msg 
+d
+c
+```
 
 ## Extra Challenges
 
